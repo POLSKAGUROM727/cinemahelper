@@ -6,13 +6,16 @@ A self-hosted torrent search and download manager that runs on your Unraid serve
 
 ## What it does
 
-- **Multi-source search** — queries The Pirate Bay, YTS, EZTV, Nyaa, TorrentGalaxy, 1337x, and optionally Bitmagnet at the same time
+- **Multi-source search** — queries several public torrent indexes at the same time and merges the results
 - **Content type detection** — automatically labels every result as Movie, Episode (S01E05), Season Pack, Complete Series, Anime Ep, Anime Batch, etc.
 - **Type filter** — after a search, filter results by type with one click (e.g. show only season packs)
 - **One-click add** — sends the magnet link straight to qBittorrent; no copy/pasting
 - **Live queue** — shows your qBittorrent download queue with progress bars, speeds, and pause/resume/delete controls, refreshing every 4 seconds
 - **Clickable titles** — click any torrent name to open its page on the source site in a new tab
+- **TMDB popovers** — click the `i` button on any result to see the poster, rating, and synopsis (requires a free API key — see configuration)
 - **Bitmagnet integration** — if you run Bitmagnet locally it becomes an additional search source powered by DHT crawling
+- **Prowlarr integration** — connect your existing Prowlarr instance to search all of its configured indexers through TorrentDeck
+- **Mobile-friendly** — full responsive layout with a bottom tab bar on phones and tablets
 
 ---
 
@@ -99,7 +102,6 @@ docker run -d \
   -e QB_HOST=http://localhost:8080 \
   -e QB_USER=admin \
   -e QB_PASS=yourpassword \
-  -e BITMAGNET_HOST=http://localhost:3333 \
   -e PORT=3000 \
   torrentdeck
 ```
@@ -120,30 +122,31 @@ Replace `YOUR-UNRAID-IP` with your server's local IP address (e.g. `192.168.1.10
 
 All configuration is done through environment variables in `docker-compose.yml`.
 
-| Variable         | Default                   | Description                                      |
-|------------------|---------------------------|--------------------------------------------------|
-| `QB_HOST`        | `http://localhost:8080`   | Full URL to your qBittorrent Web UI              |
-| `QB_USER`        | `admin`                   | qBittorrent username                             |
-| `QB_PASS`        | *(empty)*                 | qBittorrent password                             |
-| `BITMAGNET_HOST` | `http://localhost:3333`   | URL to your Bitmagnet instance (optional)        |
-| `PORT`           | `3000`                    | Port TorrentDeck listens on                      |
+| Variable         | Default                   | Description                                              |
+|------------------|---------------------------|----------------------------------------------------------|
+| `QB_HOST`        | `http://localhost:8080`   | Full URL to your qBittorrent Web UI                      |
+| `QB_USER`        | `admin`                   | qBittorrent username                                     |
+| `QB_PASS`        | *(empty)*                 | qBittorrent password                                     |
+| `BITMAGNET_HOST` | `http://localhost:3333`   | URL to your Bitmagnet instance (optional)                |
+| `TMDB_API_KEY`   | *(empty)*                 | API key for movie/show metadata popovers (optional)      |
+| `PROWLARR_HOST`  | *(empty)*                 | URL to your Prowlarr instance (optional)                 |
+| `PROWLARR_KEY`   | *(empty)*                 | Prowlarr API key (optional, found in Prowlarr → Settings → General) |
+| `PORT`           | `3000`                    | Port TorrentDeck listens on                              |
 
 ---
 
 ## Search sources
 
-| Source          | Type          | Method        | Notes                                                        |
-|-----------------|---------------|---------------|--------------------------------------------------------------|
-| The Pirate Bay  | General       | JSON API      | `apibay.org` — official TPB API, no scraping, very reliable |
-| YTS             | Movies only   | JSON API      | `yts.mx` — clean API, includes magnet, seeds, and size      |
-| EZTV            | TV shows only | JSON API      | `eztvx.to` — latest TV episodes, filters by your query      |
-| Nyaa            | Anime         | RSS feed      | `nyaa.si` — parses `nyaa:infoHash` to build magnets         |
-| TorrentGalaxy   | General       | HTML scraping | Falls back to SolidTorrents if TGx is unavailable            |
-| 1337x           | General       | HTML scraping | Auto-tries 6 mirrors; magnet fetched on demand from detail page |
-| Custom          | General       | HTML scraping | `heartiveloves.pages.dev` — your custom source               |
-| Bitmagnet       | General       | GraphQL API   | Your local DHT crawler; see Bitmagnet section below          |
+TorrentDeck searches several indexes simultaneously. You can toggle any source on or off using the pill buttons in the search bar — your selection is saved and remembered across page refreshes.
 
-You can toggle any source on or off using the pill buttons in the search bar. Disabled sources are remembered for the session.
+Sources are split into a few categories:
+
+- **General** — broad indexes covering movies, TV, software, and more
+- **Movies** — dedicated movie index with clean metadata included in results
+- **TV** — dedicated TV episode index, best for recent airing shows
+- **Anime** — anime-focused index via RSS feed
+- **Local (Bitmagnet)** — your own self-hosted DHT crawler; no external requests needed
+- **Aggregator (Prowlarr)** — fans out to every indexer configured in your Prowlarr instance
 
 ---
 
@@ -151,26 +154,40 @@ You can toggle any source on or off using the pill buttons in the search bar. Di
 
 Every result is automatically classified into one of these types:
 
-| Badge          | Meaning                                         |
-|----------------|-------------------------------------------------|
+| Badge          | Meaning                                             |
+|----------------|-----------------------------------------------------|
 | Movie          | Film release (detected from quality tags or category) |
-| S01E05         | Single TV episode                               |
-| S01E01-E03     | Multi-episode pack                              |
-| S02            | Full single season                              |
-| Complete       | Multiple seasons or complete series run         |
-| Anime Ep       | Single anime episode (group-tagged release)     |
-| Batch          | Multi-episode anime pack e.g. `[01-26]`         |
-| ?              | Could not be determined                         |
+| S01E05         | Single TV episode                                   |
+| S01E01-E03     | Multiple episodes bundled together                  |
+| S02            | Full single season                                  |
+| Complete       | Multiple seasons or full series run                 |
+| Anime Ep       | Single anime episode (group-tagged release)         |
+| Batch          | Multi-episode anime pack                            |
+| ?              | Could not be determined                             |
 
 Hover any badge to see the full detail (e.g. "Season 2, Episode 7").
 
-After searching, a **Type** filter row appears letting you show only the type you want — click "Season Pack" to hide everything else.
+After searching, a **Type** filter row appears — click any type to show only those results.
+
+---
+
+## TMDB popovers (optional)
+
+Clicking the `i` button next to any result title shows a popover with the poster, rating, vote count, and synopsis pulled from a movie/TV metadata service. This requires a free API key.
+
+To enable it, sign up at the metadata provider's site, generate an API key, and add it to your run command or `docker-compose.yml`:
+
+```yaml
+- TMDB_API_KEY=your_key_here
+```
+
+If no key is configured, clicking the `i` button will show instructions for how to set one up.
 
 ---
 
 ## Bitmagnet (optional but recommended)
 
-Bitmagnet is a self-hosted DHT crawler that builds its own torrent index over time. Once it has crawled for a day or two it becomes the most reliable source in TorrentDeck because it requires no external network requests and returns TMDB-enriched metadata.
+Bitmagnet is a self-hosted DHT crawler that builds its own torrent index over time. Once it has crawled for a day or two it becomes the most reliable source in TorrentDeck because it requires no external network requests and returns enriched metadata.
 
 ### Installing Bitmagnet on Unraid
 
@@ -239,6 +256,19 @@ Access its own web UI at `http://YOUR-UNRAID-IP:3333`. It starts crawling immedi
 
 ---
 
+## Prowlarr (optional)
+
+If you already run Prowlarr, TorrentDeck can search through all of its configured indexers in one go. Find your API key in Prowlarr under **Settings → General**, then add it to your environment:
+
+```yaml
+- PROWLARR_HOST=http://localhost:9696
+- PROWLARR_KEY=your_prowlarr_api_key
+```
+
+The Prowlarr source pill will appear in the filter bar once the host and key are set.
+
+---
+
 ## Updating TorrentDeck
 
 Replace the files in `/mnt/user/appdata/torrentdeck/` with the new versions, then rebuild:
@@ -259,7 +289,7 @@ docker run -d \
   torrentdeck
 ```
 
-If you only changed `public/index.html` (frontend-only update), you can skip the rebuild and just copy the file into the running container:
+If you only changed `public/index.html` (frontend-only update), you can skip the rebuild and hot-swap just that file:
 
 ```bash
 docker cp public/index.html torrentdeck:/app/public/index.html
@@ -271,38 +301,32 @@ Then hard-refresh your browser with `Ctrl+Shift+R`.
 
 ## Checking logs
 
-To see what the server is doing (search results, errors, qBittorrent connection status):
-
 ```bash
 docker logs torrentdeck
 docker logs torrentdeck -f   # follow live
 ```
 
-On startup the logs will show which 1337x mirror was selected, whether qBittorrent connected successfully, and whether Bitmagnet is reachable. Every search logs the result count from each source so you can see immediately which ones are working.
+On startup the logs confirm whether qBittorrent connected successfully, whether Bitmagnet is reachable, and which sources are available. Every search logs the result count per source so you can see immediately which ones are working.
 
 ---
 
 ## Troubleshooting
 
 **qBittorrent shows as offline**
-- Check that `QB_PASS` in your environment matches your actual qBittorrent password
+- Check that `QB_PASS` matches your actual qBittorrent password
 - Verify the port — the default is `8080` but yours may differ
-- If qBittorrent is set to only allow connections from specific IPs, add the Docker host IP to its whitelist under **Settings → Web UI → IP Filtering**
+- If qBittorrent is set to allow connections from specific IPs only, add the Docker host IP to its whitelist under **Settings → Web UI → IP Filtering**
 
-**A source shows a red dot / "failed" label**
-- That source is temporarily unreachable or blocking the request — the other sources still work
-- 1337x and TorrentGalaxy are scraped HTML and can go down or change layout; TPB, YTS, and EZTV are proper APIs and are much more stable
+**A source shows as failed**
+- That source is temporarily unreachable — the other sources still work
 - Check `docker logs torrentdeck` for the specific error message
+- Sources that use direct APIs tend to be more stable than those that rely on HTML scraping
 
-**Nyaa results show 0 seeds and ? size (old version)**
-- This was a known bug in earlier versions where the code looked for a `<magnetLink>` tag that doesn't exist in Nyaa's RSS. The current version reads `<nyaa:infoHash>` and builds the magnet link correctly. Rebuild from the latest files.
-
-**1337x magnet fetch fails**
-- 1337x requires fetching the detail page to get the magnet link, which is an extra network request that can fail if the mirror is being blocked
-- TPB, YTS, EZTV, Nyaa, and Bitmagnet all return magnets directly in their search results with no detail page needed — use those sources for reliability
+**A source returns magnets but no seeds or size info**
+- Rebuild from the latest files — this was a parsing bug in earlier versions that has since been fixed
 
 **Container can't reach qBittorrent or Bitmagnet**
-- TorrentDeck uses `--network host` by default which means `localhost` inside the container refers to the Unraid host
+- TorrentDeck uses `--network host` by default, meaning `localhost` inside the container refers to the Unraid host
 - If you switched to bridge networking, change `QB_HOST` to `http://host.docker.internal:8080` and add `--add-host=host.docker.internal:host-gateway` to your `docker run` command
 
 ---
@@ -311,10 +335,10 @@ On startup the logs will show which 1337x mirror was selected, whether qBittorre
 
 ```
 torrentdeck/
-├── Dockerfile            # Node 20 Alpine image, copies server + public
+├── Dockerfile            # Node 20 Alpine image
 ├── docker-compose.yml    # Environment variables and networking config
-├── package.json          # Dependencies: express, axios, cheerio
-├── server.js             # Express server — all scrapers, qBT proxy, API routes
+├── package.json          # Dependencies
+├── server.js             # Express server — all source integrations, qBT proxy, API routes
 └── public/
     └── index.html        # Single-page frontend — all UI, no build step needed
 ```
