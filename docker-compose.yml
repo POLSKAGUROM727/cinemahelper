@@ -1,0 +1,28 @@
+version: "3.8"
+
+services:
+  torrentdeck:
+    build: .
+    container_name: torrentdeck
+    restart: unless-stopped
+    network_mode: host   # lets the container reach qBittorrent + bitmagnet on localhost
+    environment:
+      # ── qBittorrent ────────────────────────────────────────────────────────
+      - QB_HOST=http://localhost:8080
+      - QB_USER=admin
+      - QB_PASS=adminadmin        # ← change this
+
+      # ── Bitmagnet (set to your Unraid IP if needed) ────────────────────────
+      # With host networking, localhost:3333 works if bitmagnet is on the same server
+      - BITMAGNET_HOST=http://localhost:3333
+
+      # ── TorrentDeck port ───────────────────────────────────────────────────
+      - PORT=3000
+
+    # ── Bridge mode alternative (uncomment + comment network_mode above) ────
+    # ports:
+    #   - "3000:3000"
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    # Then use QB_HOST=http://host.docker.internal:8080
+    # And   BITMAGNET_HOST=http://host.docker.internal:3333
