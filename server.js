@@ -14,6 +14,9 @@ const QB_HOST        = (process.env.QB_HOST        || 'http://localhost:8080').r
 const QB_USER        = process.env.QB_USER        || 'admin';
 const QB_PASS        = process.env.QB_PASS        || '';
 const BITMAGNET_HOST = (process.env.BITMAGNET_HOST || 'http://localhost:3333').replace(/\/$/, '');
+const TMDB_KEY       = process.env.TMDB_API_KEY   || "";   // optional — get free key at themoviedb.org
+const PROWLARR_HOST  = (process.env.PROWLARR_HOST  || "").replace(/\/$/, "");
+const PROWLARR_KEY   = process.env.PROWLARR_KEY   || "";
 
 const TRACKERS = [
   'udp://tracker.opentrackr.org:1337/announce',
@@ -519,7 +522,36 @@ async function qbPost(p, body, retry = true) {
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 
-const scrapers = { tpb: searchTPB, yts: searchYTS, eztv: searchEZTV, '1337x': search1337x, rarbg: searchRarbg, nyaa: searchNyaa, custom: searchCustom, bitmagnet: searchBitmagnet };
+// ─── Prowlarr — aggregated indexer proxy ──────────────────────────────────────
+
+async function searchProwlarr(q) {
+  if (!PROWLARR_HOST || !PROWLARR_KEY) throw new Error('PROWLARR_HOST / PROWLARR_KEY not configured');
+  const url = `${PROWLARR_HOST}/api/v1/search?query=${encodeURIComponent(q)}&type=search&limit=100`;
+  const r = await axios.get(url, {
+    headers: { 'X-Api-Key': PROWLARR_KEY, Accept: 'application/json' },
+    timeout: 20000, validateStatus: s => s < 500,
+  });
+  if (r.status !== 200) throw new Error(`Prowlarr HTTP ${r.status}`);
+  const results = (r.data || []).map(t => {
+    const dl = t.downloadUrl || '';
+    const magnet     = dl.startsWith('magnet:') ? dl : '';
+    const torrentUrl = !magnet && dl ? dl : '';
+    if (!magnet && !torrentUrl) return null;
+    return annotate({
+      title:    t.title || 'Unknown',
+      size:     fmtSize(t.size),
+      seeders:  t.seeders  || 0,
+      leechers: t.leechers || 0,
+      magnet, torrentUrl,
+      source: `Prowlarr (${t.indexer || '?'})`,
+      skey:   'prowlarr',
+    });
+  }).filter(Boolean);
+  console.log(`[Prowlarr] ${results.length} results for "${q}"`);
+  return results;
+}
+
+const scrapers = { tpb: searchTPB, yts: searchYTS, eztv: searchEZTV, '1337x': search1337x, rarbg: searchRarbg, nyaa: searchNyaa, custom: searchCustom, bitmagnet: searchBitmagnet, prowlarr: searchProwlarr };
 
 app.get('/api/search', async (req, res) => {
   const q = (req.query.q || '').trim();
@@ -546,6 +578,38 @@ app.get('/api/magnet', async (req, res) => {
     if (!magnet) return res.status(404).json({ error: 'Magnet not found — try TPB, Nyaa or Bitmagnet result.' });
     res.json({ magnet });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+
+// ─── TMDB proxy — server-side to keep API key secret ─────────────────────────
+app.get('/api/tmdb', async (req, res) => {
+  if (!TMDB_KEY) return res.status(503).json({ error: 'TMDB_API_KEY not configured' });
+  const q    = (req.query.q    || '').trim();
+  const type = (req.query.type || 'multi'); // movie | tv | multi
+  if (!q) return res.status(400).json({ error: 'No query' });
+  try {
+    const url = `https://api.themoviedb.org/3/search/${type}?query=${encodeURIComponent(q)}&api_key=${TMDB_KEY}&language=en-US&page=1&include_adult=false`;
+    const r   = await axios.get(url, { timeout: 8000, validateStatus: s => s < 500 });
+    if (r.status !== 200) return res.status(r.status).json({ error: `TMDB HTTP ${r.status}` });
+    const results = (r.data.results || []).slice(0, 1);
+    if (!results.length) return res.json({ found: false });
+    const item   = results[0];
+    const title  = item.title || item.name || '';
+    const year   = (item.release_date || item.first_air_date || '').slice(0, 4);
+    const poster = item.poster_path ? `https://image.tmdb.org/t/p/w200${item.poster_path}` : null;
+    res.json({
+      found:    true,
+      title,
+      year,
+      rating:   item.vote_average ? item.vote_average.toFixed(1) : null,
+      votes:    item.vote_count   || 0,
+      overview: item.overview     || '',
+      poster,
+      mediaType: item.media_type || type,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/qbt/status',   async (req, res) => { try { res.json({ ok: await qbLogin() }); } catch { res.json({ ok: false }); } });
@@ -581,5 +645,7 @@ Promise.all([
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n  TorrentDeck  →  http://0.0.0.0:${PORT}`);
   console.log(`  QB_HOST:        ${QB_HOST}`);
-  console.log(`  BITMAGNET_HOST: ${BITMAGNET_HOST}\n`);
+  console.log(`  BITMAGNET_HOST: ${BITMAGNET_HOST}`);
+  console.log(`  TMDB:           ${TMDB_KEY ? 'configured ✓' : 'not set (popovers disabled)'}`);
+  console.log(`  PROWLARR:       ${PROWLARR_HOST || 'not configured'}\n`);
 });

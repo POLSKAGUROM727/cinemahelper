@@ -5,24 +5,22 @@ services:
     build: .
     container_name: torrentdeck
     restart: unless-stopped
-    network_mode: host   # lets the container reach qBittorrent + bitmagnet on localhost
+    network_mode: host
     environment:
       # ── qBittorrent ────────────────────────────────────────────────────────
       - QB_HOST=http://localhost:8080
       - QB_USER=admin
-      - QB_PASS=adminadmin        # ← change this
+      - QB_PASS=adminadmin               # ← change this
 
-      # ── Bitmagnet (set to your Unraid IP if needed) ────────────────────────
-      # With host networking, localhost:3333 works if bitmagnet is on the same server
+      # ── Bitmagnet (optional) ───────────────────────────────────────────────
       - BITMAGNET_HOST=http://localhost:3333
+
+      # ── TMDB (optional) — get a free key at themoviedb.org/settings/api ──
+      # - TMDB_API_KEY=your_key_here
+
+      # ── Prowlarr (optional) ────────────────────────────────────────────────
+      # - PROWLARR_HOST=http://localhost:9696
+      # - PROWLARR_KEY=your_prowlarr_api_key
 
       # ── TorrentDeck port ───────────────────────────────────────────────────
       - PORT=3000
-
-    # ── Bridge mode alternative (uncomment + comment network_mode above) ────
-    # ports:
-    #   - "3000:3000"
-    # extra_hosts:
-    #   - "host.docker.internal:host-gateway"
-    # Then use QB_HOST=http://host.docker.internal:8080
-    # And   BITMAGNET_HOST=http://host.docker.internal:3333
