@@ -12,6 +12,11 @@ services:
       - QB_USER=admin
       - QB_PASS=adminadmin               # ← change this
 
+      # ── Download path shortcuts — shown as quick-fill buttons in the add modal ──
+      # Format: "Label:containerPath" — use the path qBittorrent sees, not the Unraid host path
+      # Your setup: /downloads maps to /mnt/user/Share/Jellyfin/
+      - QB_DOWNLOAD_PATHS=Movies:/downloads/Movies,Shows:/downloads/Shows,Downloads:/downloads
+
       # ── Bitmagnet (optional) ───────────────────────────────────────────────
       - BITMAGNET_HOST=http://localhost:3333
 

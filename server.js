@@ -14,9 +14,30 @@ const QB_HOST        = (process.env.QB_HOST        || 'http://localhost:8080').r
 const QB_USER        = process.env.QB_USER        || 'admin';
 const QB_PASS        = process.env.QB_PASS        || '';
 const BITMAGNET_HOST = (process.env.BITMAGNET_HOST || 'http://localhost:3333').replace(/\/$/, '');
-const TMDB_KEY       = process.env.TMDB_API_KEY   || "";   // optional — get free key at themoviedb.org
+const TMDB_KEY       = process.env.TMDB_API_KEY   || "";
 const PROWLARR_HOST  = (process.env.PROWLARR_HOST  || "").replace(/\/$/, "");
 const PROWLARR_KEY   = process.env.PROWLARR_KEY   || "";
+
+// QB_DOWNLOAD_PATHS — comma-separated list of save paths to show as quick-fill buttons.
+// Each entry can be just a path (/downloads/Movies) or a labelled path (Movies:/downloads/Movies).
+// Defaults to /downloads and two subfolders as a sensible starting point.
+// Example: QB_DOWNLOAD_PATHS="Movies:/downloads/Movies,Shows:/downloads/Shows,Anime:/downloads/Anime"
+const QB_DOWNLOAD_PATHS = (() => {
+  const raw = process.env.QB_DOWNLOAD_PATHS || '/downloads,Movies:/downloads/Movies,Shows:/downloads/Shows';
+  return raw.split(',').map(entry => {
+    entry = entry.trim();
+    if (!entry) return null;
+    const colon = entry.indexOf(':');
+    // Has a label prefix like "Movies:/downloads/Movies"
+    if (colon > 0 && colon < entry.length - 1) {
+      const label = entry.slice(0, colon).trim();
+      const path  = entry.slice(colon + 1).trim();
+      return { label, path };
+    }
+    // Plain path — use the last segment as the label
+    return { label: entry.split('/').filter(Boolean).pop() || entry, path: entry };
+  }).filter(Boolean);
+})();
 
 const TRACKERS = [
   'udp://tracker.opentrackr.org:1337/announce',
@@ -612,15 +633,24 @@ app.get('/api/tmdb', async (req, res) => {
   }
 });
 
+// Download path shortcuts — returns the configured QB_DOWNLOAD_PATHS list
+app.get('/api/paths', (req, res) => res.json(QB_DOWNLOAD_PATHS));
+
 app.get('/api/qbt/status',   async (req, res) => { try { res.json({ ok: await qbLogin() }); } catch { res.json({ ok: false }); } });
 app.get('/api/torrents',     async (req, res) => { try { res.json(await qbGet('/torrents/info')); }  catch (e) { res.status(500).json({ error: e.message }); } });
 app.get('/api/transferinfo', async (req, res) => { try { res.json(await qbGet('/transfer/info')); } catch (e) { res.status(500).json({ error: e.message }); } });
 
 app.post('/api/add', async (req, res) => {
-  const { magnet, torrentUrl } = req.body;
+  const { magnet, torrentUrl, savePath } = req.body;
   if (!magnet && !torrentUrl) return res.status(400).json({ error: 'No magnet or URL' });
-  try { console.log('[ADD]', (magnet||torrentUrl).slice(0,100)); await qbPost('/torrents/add', `urls=${encodeURIComponent(magnet||torrentUrl)}`); res.json({ ok: true }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
+  try {
+    const url = magnet || torrentUrl;
+    console.log('[ADD]', url.slice(0, 100), savePath ? `→ ${savePath}` : '');
+    let body = `urls=${encodeURIComponent(url)}`;
+    if (savePath && savePath.trim()) body += `&savepath=${encodeURIComponent(savePath.trim())}`;
+    await qbPost('/torrents/add', body);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.post('/api/torrent/pause',  async (req, res) => { try { await qbPost('/torrents/pause',  `hashes=${req.body.hash}`); res.json({ ok: true }); } catch (e) { res.status(500).json({ error: e.message }); } });
 app.post('/api/torrent/resume', async (req, res) => { try { await qbPost('/torrents/resume', `hashes=${req.body.hash}`); res.json({ ok: true }); } catch (e) { res.status(500).json({ error: e.message }); } });

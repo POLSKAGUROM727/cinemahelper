@@ -28,6 +28,92 @@
       --sans:   'Inter', system-ui, sans-serif;
       --mono:   'JetBrains Mono', monospace;
     }
+
+    /* ── THEMES ── applied to <html> via data-theme attribute ── */
+
+    /* 1. Midnight (default — deep navy blue) */
+    [data-theme="midnight"] {
+      --bg:     #0f1117; --bg2: #161b27; --bg3: #1e2433; --bg4: #252d3d;
+      --border: #2a3347; --bord2: #334060;
+      --text: #e2e8f0; --text2: #94a3b8; --text3: #64748b;
+      --cyan: #38bdf8; --green: #22c55e;
+    }
+    /* 2. Abyss (pure black, high contrast) */
+    [data-theme="abyss"] {
+      --bg:     #000000; --bg2: #0a0a0a; --bg3: #111111; --bg4: #1a1a1a;
+      --border: #222222; --bord2: #333333;
+      --text: #ffffff; --text2: #a0a0a0; --text3: #555555;
+      --cyan: #00d4ff; --green: #00ff88;
+    }
+    /* 3. Forest (dark green, earthy) */
+    [data-theme="forest"] {
+      --bg:     #0d1410; --bg2: #131d17; --bg3: #192620; --bg4: #1f2e27;
+      --border: #243628; --bord2: #2e4434;
+      --text: #d4e8d4; --text2: #84a884; --text3: #4d6b4d;
+      --cyan: #4ade80; --green: #86efac;
+    }
+    /* 4. Sunset (dark warm, orange/amber accents) */
+    [data-theme="sunset"] {
+      --bg:     #12090a; --bg2: #1c100f; --bg3: #251714; --bg4: #2e1e1a;
+      --border: #3a2520; --bord2: #4a3028;
+      --text: #f0ddd4; --text2: #b8896e; --text3: #7a5040;
+      --cyan: #fb923c; --green: #fbbf24;
+    }
+    /* 5. Slate (cool grey, muted and minimal) */
+    [data-theme="slate"] {
+      --bg:     #0e1117; --bg2: #161a23; --bg3: #1d222e; --bg4: #242a38;
+      --border: #2d3448; --bord2: #3a4260;
+      --text: #cdd5e0; --text2: #7f8fa6; --text3: #505c70;
+      --cyan: #748fca; --green: #63b3a0;
+    }
+    /* 6. Rose (dark pink/mauve, warm purple) */
+    [data-theme="rose"] {
+      --bg:     #110d12; --bg2: #1a1220; --bg3: #22182c; --bg4: #2a1e38;
+      --border: #342444; --bord2: #412d58;
+      --text: #edddef; --text2: #a07aaa; --text3: #644d70;
+      --cyan: #e879f9; --green: #c084fc;
+    }
+
+    /* ── THEME PICKER ── */
+    .theme-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text2); padding: 3px 10px; font-size: 11px; font-family: var(--sans);
+      cursor: pointer; transition: all .13s; white-space: nowrap; flex-shrink: 0;
+    }
+    .theme-btn:hover { border-color: var(--bord2); color: var(--text); }
+    .theme-icon { font-size: 13px; }
+
+    .theme-dropdown {
+      position: absolute; top: calc(100% + 8px); right: 0;
+      background: var(--bg2); border: 1px solid var(--bord2); border-radius: 10px;
+      padding: 8px; z-index: 200;
+      box-shadow: 0 12px 40px rgba(0,0,0,.5);
+      display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;
+      width: 230px;
+      animation: tdropIn .12s ease;
+    }
+    @keyframes tdropIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:none} }
+
+    .theme-option {
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+      padding: 8px 6px; border-radius: 7px; cursor: pointer;
+      border: 2px solid transparent; transition: all .13s;
+    }
+    .theme-option:hover { background: var(--bg3); }
+    .theme-option.active { border-color: var(--cyan); background: var(--bg3); }
+
+    .theme-swatch {
+      width: 44px; height: 30px; border-radius: 5px; overflow: hidden;
+      display: grid; grid-template-columns: 1fr 1fr;
+      border: 1px solid rgba(255,255,255,.08);
+      flex-shrink: 0;
+    }
+    .theme-swatch span { display: block; }
+    .theme-label { font-size: 10px; font-weight: 600; color: var(--text2); letter-spacing: .5px; text-transform: uppercase; }
+    .theme-option.active .theme-label { color: var(--cyan); }
+
+    .theme-wrap { position: relative; flex-shrink: 0; }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html { height: 100%; }
     body {
@@ -274,6 +360,57 @@
     .tmdb-no-key { padding: 16px; color: var(--text3); font-size: 12px; text-align: center; line-height: 1.6; }
     .tmdb-no-key a { color: var(--cyan); }
 
+    /* ─── SAVE PATH MODAL ────────────────────────────────────── */
+    .sp-overlay {
+      position: fixed; inset: 0; z-index: 150;
+      background: rgba(0,0,0,.55);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+      animation: fadeIn .12s ease;
+    }
+    .sp-card {
+      background: var(--bg2); border: 1px solid var(--bord2); border-radius: 10px;
+      width: 100%; max-width: 460px; padding: 20px;
+      box-shadow: 0 16px 50px rgba(0,0,0,.55);
+      animation: slideUp .15s ease;
+    }
+    .sp-title { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 4px; letter-spacing: .3px; text-transform: uppercase; }
+    .sp-name  { font-size: 13px; color: var(--text); line-height: 1.5; margin-bottom: 16px; word-break: break-word; }
+    .sp-label { font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: .5px; text-transform: uppercase; margin-bottom: 6px; display: block; }
+    .sp-input-row { display: flex; gap: 8px; align-items: center; }
+    .sp-input {
+      flex: 1; height: 38px;
+      background: var(--bg3); border: 1px solid var(--bord2); border-radius: 6px;
+      color: var(--text); padding: 0 12px; font-family: var(--mono); font-size: 12px; outline: none;
+      transition: border-color .15s;
+    }
+    .sp-input:focus { border-color: var(--cyan); }
+    .sp-input::placeholder { color: var(--text3); }
+    .sp-hint { font-size: 11px; color: var(--text3); margin-top: 6px; line-height: 1.5; }
+    .sp-hint strong { color: var(--text2); }
+    .sp-quick { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+    .sp-quick-btn {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 5px;
+      color: var(--text3); padding: 3px 10px; font-size: 11px; font-family: var(--mono);
+      cursor: pointer; transition: all .12s; white-space: nowrap;
+    }
+    .sp-quick-btn:hover { border-color: var(--cyan); color: var(--cyan); }
+    .sp-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+    .sp-cancel {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text2); padding: 7px 16px; font-size: 13px; font-family: var(--sans);
+      cursor: pointer; transition: all .12s;
+    }
+    .sp-cancel:hover { border-color: var(--bord2); color: var(--text); }
+    .sp-confirm {
+      background: var(--cyan); border: none; border-radius: 6px;
+      color: #0f1117; padding: 7px 20px; font-size: 13px; font-weight: 600; font-family: var(--sans);
+      cursor: pointer; transition: background .13s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .sp-confirm:hover { background: #7dd3fc; }
+    .sp-confirm:disabled { opacity: .4; cursor: default; }
+
     /* ─── MOBILE TAB BAR ─────────────────────────────────────── */
     .tab-bar { display: none; }
 
@@ -365,6 +502,12 @@
   <div class="speeds" id="hdr-speeds" style="display:none"></div>
   <div class="spacer"></div>
   <span class="ts" id="hdr-ts"></span>
+  <div class="theme-wrap" id="theme-wrap">
+    <button class="theme-btn" id="theme-btn" title="Change theme">
+      <span class="theme-icon" id="theme-icon">🎨</span>
+      <span id="theme-btn-label">Theme</span>
+    </button>
+  </div>
 </header>
 
 <div class="search-section">
@@ -405,6 +548,8 @@
 
 <!-- TMDB popover container (injected by JS) -->
 <div id="tmdb-root"></div>
+<!-- Save path modal container -->
+<div id="sp-root"></div>
 
 <script>
 // ─── Persistent state ─────────────────────────────────────────────────────────
@@ -865,8 +1010,94 @@ async function search() {
   updateSearchBtn(); updateResultsPanel(); updateFilters();
 }
 
+// ─── Save path modal ──────────────────────────────────────────────────────────
+
+// Paths are fetched from the server (set via QB_DOWNLOAD_PATHS env var)
+let QUICK_PATHS = [];
+fetch('/api/paths').then(r => r.json()).then(d => { QUICK_PATHS = d || []; }).catch(() => {});
+
+function loadSavePath() {
+  try { return localStorage.getItem('td_savepath') || ''; } catch { return ''; }
+}
+function rememberSavePath(p) {
+  try { if (p.trim()) localStorage.setItem('td_savepath', p.trim()); } catch {}
+}
+
+// Show the save path modal; returns a Promise that resolves to
+// { confirmed: true, savePath: '...' } or { confirmed: false }
+function showSavePathModal(item) {
+  return new Promise(resolve => {
+    const root = document.getElementById('sp-root');
+    const last = loadSavePath();
+
+    // Build quick-path buttons — use configured label and show full path as tooltip
+    const quickBtns = QUICK_PATHS.length
+      ? QUICK_PATHS.map(p =>
+          `<button class="sp-quick-btn" data-path="${esc(p.path)}" title="${esc(p.path)}">${esc(p.label)}</button>`
+        ).join('')
+      : '';
+
+    // Default placeholder: first configured path, or /downloads
+    const placeholder = QUICK_PATHS.length ? QUICK_PATHS[0].path : '/downloads';
+
+    root.innerHTML = `
+      <div class="sp-overlay" id="sp-overlay">
+        <div class="sp-card">
+          <div class="sp-title">Add to qBittorrent</div>
+          <div class="sp-name">${esc(item.title)}</div>
+          <label class="sp-label" for="sp-input">Save path <span style="color:var(--text3);font-weight:400;text-transform:none">(optional — leave blank for qBittorrent default)</span></label>
+          <div class="sp-input-row">
+            <input class="sp-input" id="sp-input" type="text"
+              placeholder="${esc(placeholder)}"
+              value="${esc(last)}"
+              autocomplete="off" spellcheck="false" autocorrect="off">
+          </div>
+          ${quickBtns ? `<div class="sp-quick">${quickBtns}</div>` : ''}
+          <div class="sp-hint">
+            Use the <strong>container path</strong> that qBittorrent sees — e.g. <strong>/downloads/Movies</strong>,
+            not the Unraid host path. Configure folders via <strong>QB_DOWNLOAD_PATHS</strong> in docker-compose.yml.
+          </div>
+          <div class="sp-footer">
+            <button class="sp-cancel" id="sp-cancel">Cancel</button>
+            <button class="sp-confirm" id="sp-confirm">+ Add Torrent</button>
+          </div>
+        </div>
+      </div>`;
+
+    const input   = document.getElementById('sp-input');
+    const confirm = document.getElementById('sp-confirm');
+    const cancel  = document.getElementById('sp-cancel');
+    const overlay = document.getElementById('sp-overlay');
+
+    // Quick path buttons
+    root.querySelectorAll('[data-path]').forEach(btn => {
+      btn.addEventListener('click', () => { input.value = btn.dataset.path; input.focus(); });
+    });
+
+    const doConfirm = () => {
+      rememberSavePath(input.value);
+      root.innerHTML = '';
+      resolve({ confirmed: true, savePath: input.value.trim() });
+    };
+    const doCancel = () => { root.innerHTML = ''; resolve({ confirmed: false }); };
+
+    confirm.addEventListener('click', doConfirm);
+    cancel.addEventListener('click',  doCancel);
+    overlay.addEventListener('click', e => { if (e.target.id === 'sp-overlay') doCancel(); });
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') doConfirm(); if (e.key === 'Escape') doCancel(); });
+
+    input.focus();
+    input.select();
+  });
+}
+
 async function addTorrent(item) {
   if (S.addingId) return;
+
+  // Show save path modal before doing anything
+  const { confirmed, savePath } = await showSavePathModal(item);
+  if (!confirmed) return;
+
   S.addingId = item.id; updateResultsPanel();
   try {
     let magnet=item.magnet||'', torrentUrl=item.torrentUrl||'';
@@ -877,12 +1108,19 @@ async function addTorrent(item) {
       magnet=d.magnet||''; S.fetchingId=null;
     }
     if (!magnet && !torrentUrl) { alert('Could not get magnet link.\nTry a TPB, Nyaa, or Bitmagnet result instead.'); return; }
-    const r = await fetch('/api/add', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({magnet:magnet||undefined,torrentUrl:torrentUrl||undefined})});
+    const r = await fetch('/api/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        magnet:     magnet     || undefined,
+        torrentUrl: torrentUrl || undefined,
+        savePath:   savePath   || undefined,
+      }),
+    });
     const d = await r.json();
     if (d.ok) {
       S.addedIds.add(item.id);
       setTimeout(refreshQueue, 800);
-      // On mobile switch to queue tab to see the new download
       if (window.innerWidth <= 700) setTimeout(() => switchTab('queue'), 900);
     } else alert(d.error || 'qBittorrent rejected the torrent.');
   } catch(e) { alert('Error: '+e.message); }
@@ -904,6 +1142,100 @@ async function torrentAction(action, hash, extra={}) {
   setTimeout(refreshQueue, 400);
 }
 
+// ─── Theme system ─────────────────────────────────────────────────────────────
+
+const THEMES = [
+  {
+    id: 'midnight', label: 'Midnight', icon: '🌙',
+    swatchBg: '#0f1117', swatchBg2: '#161b27', swatchAcc: '#38bdf8', swatchAcc2: '#22c55e',
+  },
+  {
+    id: 'abyss', label: 'Abyss', icon: '⚫',
+    swatchBg: '#000000', swatchBg2: '#111111', swatchAcc: '#00d4ff', swatchAcc2: '#00ff88',
+  },
+  {
+    id: 'forest', label: 'Forest', icon: '🌲',
+    swatchBg: '#0d1410', swatchBg2: '#192620', swatchAcc: '#4ade80', swatchAcc2: '#86efac',
+  },
+  {
+    id: 'sunset', label: 'Sunset', icon: '🌅',
+    swatchBg: '#12090a', swatchBg2: '#251714', swatchAcc: '#fb923c', swatchAcc2: '#fbbf24',
+  },
+  {
+    id: 'slate', label: 'Slate', icon: '🩶',
+    swatchBg: '#0e1117', swatchBg2: '#1d222e', swatchAcc: '#748fca', swatchAcc2: '#63b3a0',
+  },
+  {
+    id: 'rose', label: 'Rose', icon: '🌸',
+    swatchBg: '#110d12', swatchBg2: '#22182c', swatchAcc: '#e879f9', swatchAcc2: '#c084fc',
+  },
+];
+
+function loadTheme() {
+  try { return localStorage.getItem('td_theme') || 'midnight'; } catch { return 'midnight'; }
+}
+function saveTheme(id) {
+  try { localStorage.setItem('td_theme', id); } catch {}
+}
+function applyTheme(id) {
+  document.documentElement.setAttribute('data-theme', id);
+  const t = THEMES.find(x => x.id === id) || THEMES[0];
+  const iconEl  = document.getElementById('theme-icon');
+  const labelEl = document.getElementById('theme-btn-label');
+  if (iconEl)  iconEl.textContent  = t.icon;
+  if (labelEl) labelEl.textContent = t.label;
+}
+
+let themeDropOpen = false;
+
+function openThemeDrop() {
+  const wrap = document.getElementById('theme-wrap');
+  const existing = document.getElementById('theme-dropdown');
+  if (existing) { existing.remove(); themeDropOpen = false; return; }
+
+  themeDropOpen = true;
+  const currentId = loadTheme();
+  const drop = document.createElement('div');
+  drop.id = 'theme-dropdown';
+  drop.className = 'theme-dropdown';
+  drop.innerHTML = THEMES.map(t => `
+    <div class="theme-option${t.id === currentId ? ' active' : ''}" data-tid="${t.id}">
+      <div class="theme-swatch">
+        <span style="background:${t.swatchBg};grid-column:1;grid-row:1 / span 2"></span>
+        <span style="background:${t.swatchBg2};grid-column:2;grid-row:1"></span>
+        <span style="background:${t.swatchAcc};grid-column:2;grid-row:2"></span>
+      </div>
+      <div class="theme-label">${t.icon} ${t.label}</div>
+    </div>
+  `).join('');
+
+  drop.querySelectorAll('[data-tid]').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.dataset.tid;
+      applyTheme(id);
+      saveTheme(id);
+      drop.remove();
+      themeDropOpen = false;
+    });
+  });
+
+  wrap.appendChild(drop);
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', function handler(e) {
+      if (!wrap.contains(e.target)) {
+        drop.remove();
+        themeDropOpen = false;
+        document.removeEventListener('click', handler);
+      }
+    });
+  }, 0);
+}
+
+// Apply saved theme immediately on load (before boot)
+applyTheme(loadTheme());
+
 // ─── Boot ─────────────────────────────────────────────────────────────────────
 (function init() {
   const qi = document.getElementById('q-input');
@@ -914,6 +1246,7 @@ async function torrentAction(action, hash, extra={}) {
   if (window.innerWidth > 700) qi.focus();
 
   document.getElementById('search-btn').addEventListener('click', search);
+  document.getElementById('theme-btn').addEventListener('click', e => { e.stopPropagation(); openThemeDrop(); });
 
   // Keyboard shortcut: press / or s to focus search (desktop)
   document.addEventListener('keydown', e => {
