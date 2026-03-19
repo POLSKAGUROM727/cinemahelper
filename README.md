@@ -1,21 +1,25 @@
 # TorrentDeck
 
-A self-hosted torrent search and download manager that runs on your Unraid server. Search across multiple sources simultaneously, see episode/season/movie type badges on every result, and send torrents directly to qBittorrent — all from one clean web UI.
+A self-hosted torrent search and download manager that runs on your Unraid server. Search across multiple sources simultaneously, see content type and quality badges on every result, and send torrents directly to qBittorrent — all from one clean web UI.
 
 ---
 
-## What it does
+## Features
 
 - **Multi-source search** — queries several public torrent indexes at the same time and merges the results
 - **Content type detection** — automatically labels every result as Movie, Episode (S01E05), Season Pack, Complete Series, Anime Ep, Anime Batch, etc.
-- **Type filter** — after a search, filter results by type with one click (e.g. show only season packs)
-- **One-click add** — sends the magnet link straight to qBittorrent; no copy/pasting
+- **Type filter** — after a search, filter results by content type with one click
+- **Quality filter** — filter results by resolution/source (4K, 1080p, 720p, 480p, BluRay, WEB, HDTV, CAM) — only shows options that exist in the current results
+- **Per-torrent save path** — choose exactly which folder a torrent downloads to, with configurable quick-fill shortcuts for your common folders
+- **One-click add** — sends the magnet link straight to qBittorrent with a single click
 - **Live queue** — shows your qBittorrent download queue with progress bars, speeds, and pause/resume/delete controls, refreshing every 4 seconds
 - **Clickable titles** — click any torrent name to open its page on the source site in a new tab
-- **TMDB popovers** — click the `i` button on any result to see the poster, rating, and synopsis (requires a free API key — see configuration)
-- **Bitmagnet integration** — if you run Bitmagnet locally it becomes an additional search source powered by DHT crawling
-- **Prowlarr integration** — connect your existing Prowlarr instance to search all of its configured indexers through TorrentDeck
-- **Mobile-friendly** — full responsive layout with a bottom tab bar on phones and tablets
+- **Metadata popovers** — click the `i` button on any result to see the poster, rating, and synopsis (requires a free API key — see configuration)
+- **9 themes** — dark and light colour themes selectable from the top-right menu, remembered across sessions
+- **Persistent preferences** — source toggles and theme choice are saved and restored on every page load
+- **Bitmagnet integration** — optional self-hosted DHT crawler that becomes an additional local search source
+- **Prowlarr integration** — optional connection to your existing Prowlarr instance to search all of its configured indexers
+- **Mobile-friendly** — responsive layout with a bottom tab bar on phones and tablets
 
 ---
 
@@ -38,7 +42,7 @@ mkdir -p /mnt/user/appdata/torrentdeck/public
 cd /mnt/user/appdata/torrentdeck
 ```
 
-Then copy these files from the zip into that directory, preserving the folder structure:
+Copy the files from the zip preserving the folder structure:
 
 ```
 torrentdeck/
@@ -56,19 +60,17 @@ You can do this via SCP from your computer:
 scp -r ./torrentdeck/* root@YOUR-UNRAID-IP:/mnt/user/appdata/torrentdeck/
 ```
 
-Or use the Unraid terminal to paste each file's contents directly.
-
 ---
 
-### Step 2 — Set your qBittorrent password
+### Step 2 — Configure docker-compose.yml
 
-Open `docker-compose.yml` and update the credentials to match your qBittorrent setup:
+Open the compose file and update it to match your setup:
 
 ```bash
 nano /mnt/user/appdata/torrentdeck/docker-compose.yml
 ```
 
-Change these three lines:
+At minimum, set your qBittorrent credentials:
 
 ```yaml
 - QB_HOST=http://localhost:8080   # change port if yours is different
@@ -76,7 +78,7 @@ Change these three lines:
 - QB_PASS=adminadmin               # ← your actual password
 ```
 
-If you don't know your qBittorrent port, open the Unraid Docker tab, click qBittorrent, and check the Web UI port mapping.
+If you use a mapped download path (e.g. qBittorrent's `/downloads` maps to `/mnt/user/Share/Jellyfin/`), also configure your folder shortcuts — see the [Save path configuration](#save-path-configuration) section below.
 
 ---
 
@@ -114,84 +116,146 @@ docker run -d \
 http://YOUR-UNRAID-IP:3000
 ```
 
-Replace `YOUR-UNRAID-IP` with your server's local IP address (e.g. `192.168.1.100`). You can find this in Unraid under **Settings → Network Settings**.
+Find your Unraid IP under **Settings → Network Settings**.
 
 ---
 
 ## Environment variables
 
-All configuration is done through environment variables in `docker-compose.yml`.
+| Variable              | Default                                                                        | Description                                                                    |
+|-----------------------|--------------------------------------------------------------------------------|--------------------------------------------------------------------------------|
+| `QB_HOST`             | `http://localhost:8080`                                                        | Full URL to your qBittorrent Web UI                                            |
+| `QB_USER`             | `admin`                                                                        | qBittorrent username                                                           |
+| `QB_PASS`             | *(empty)*                                                                      | qBittorrent password                                                           |
+| `QB_DOWNLOAD_PATHS`   | `Movies:/downloads/Movies,Shows:/downloads/Shows,Downloads:/downloads`        | Comma-separated folder shortcuts for the save path modal (see below)           |
+| `BITMAGNET_HOST`      | `http://localhost:3333`                                                        | URL to your Bitmagnet instance (optional)                                      |
+| `TMDB_API_KEY`        | *(empty)*                                                                      | API key for metadata popovers (optional)                                       |
+| `PROWLARR_HOST`       | *(empty)*                                                                      | URL to your Prowlarr instance (optional)                                       |
+| `PROWLARR_KEY`        | *(empty)*                                                                      | Prowlarr API key — found in Prowlarr → Settings → General (optional)          |
+| `PORT`                | `3000`                                                                         | Port TorrentDeck listens on                                                    |
 
-| Variable         | Default                   | Description                                              |
-|------------------|---------------------------|----------------------------------------------------------|
-| `QB_HOST`        | `http://localhost:8080`   | Full URL to your qBittorrent Web UI                      |
-| `QB_USER`        | `admin`                   | qBittorrent username                                     |
-| `QB_PASS`        | *(empty)*                 | qBittorrent password                                     |
-| `BITMAGNET_HOST` | `http://localhost:3333`   | URL to your Bitmagnet instance (optional)                |
-| `TMDB_API_KEY`   | *(empty)*                 | API key for movie/show metadata popovers (optional)      |
-| `PROWLARR_HOST`  | *(empty)*                 | URL to your Prowlarr instance (optional)                 |
-| `PROWLARR_KEY`   | *(empty)*                 | Prowlarr API key (optional, found in Prowlarr → Settings → General) |
-| `PORT`           | `3000`                    | Port TorrentDeck listens on                              |
+---
+
+## Save path configuration
+
+Every time you click `+ Add`, a modal appears showing the torrent name and a path input. You can type any path, or click a quick-fill button to instantly fill a common folder.
+
+These buttons are driven by the `QB_DOWNLOAD_PATHS` environment variable. The format is:
+
+```
+Label:containerPath,Label:containerPath,...
+```
+
+Where `containerPath` is the path **qBittorrent sees inside its container** — not the Unraid host path.
+
+**Example:** if qBittorrent has `/downloads` mapped to `/mnt/user/Share/Jellyfin/`, and you have `Movies` and `Shows` folders inside that:
+
+```yaml
+- QB_DOWNLOAD_PATHS=Movies:/downloads/Movies,Shows:/downloads/Shows,Downloads:/downloads
+```
+
+This shows three buttons — **Movies**, **Shows**, and **Downloads** — that fill `/downloads/Movies`, `/downloads/Shows`, and `/downloads` respectively.
+
+The last path you used is remembered and pre-filled next time. Leave the field blank to use qBittorrent's default download directory.
+
+---
+
+## Themes
+
+Click the **🎨 Theme** button in the top-right corner of the header to open the theme picker. Nine themes are available:
+
+| Theme       | Type  | Description                              |
+|-------------|-------|------------------------------------------|
+| 🌙 Midnight | Dark  | Deep navy blue — the default             |
+| ⚫ Abyss    | Dark  | Pure black with high-contrast accents    |
+| 🌲 Forest   | Dark  | Dark earthy green                        |
+| 🌅 Sunset   | Dark  | Deep warm dark with orange/amber tones   |
+| 🩶 Slate    | Dark  | Cool muted grey-blue                     |
+| 🌸 Rose     | Dark  | Dark mauve with pink/violet accents      |
+| ⚡ Neon     | Dark  | Near-black with vivid electric accents — good for low-brightness screens |
+| 🧊 Arctic   | Light | Clean white and light blue               |
+| ☕ Latte    | Light | Warm off-white with coffee tones         |
+
+Your choice is saved to the browser and restored on every page load. The two light themes (Arctic and Latte) and the Neon theme are especially useful on low-brightness screens.
 
 ---
 
 ## Search sources
 
-TorrentDeck searches several indexes simultaneously. You can toggle any source on or off using the pill buttons in the search bar — your selection is saved and remembered across page refreshes.
+TorrentDeck searches several indexes simultaneously. Toggle any source on or off with the pill buttons in the search bar — your selection is saved and restored across page refreshes.
 
-Sources are split into a few categories:
-
-- **General** — broad indexes covering movies, TV, software, and more
-- **Movies** — dedicated movie index with clean metadata included in results
-- **TV** — dedicated TV episode index, best for recent airing shows
-- **Anime** — anime-focused index via RSS feed
-- **Local (Bitmagnet)** — your own self-hosted DHT crawler; no external requests needed
-- **Aggregator (Prowlarr)** — fans out to every indexer configured in your Prowlarr instance
+| Category       | Description                                                               |
+|----------------|---------------------------------------------------------------------------|
+| General        | Broad indexes covering movies, TV, software, games, and more              |
+| Movies         | Dedicated movie index with quality metadata included in results           |
+| TV             | Dedicated TV episode index, works best for recently aired shows           |
+| Anime          | Anime-focused index via RSS feed                                          |
+| Bitmagnet      | Your local self-hosted DHT crawler — no external requests needed          |
+| Prowlarr       | Fans out to every indexer configured in your Prowlarr instance            |
 
 ---
 
 ## Content type detection
 
-Every result is automatically classified into one of these types:
+Every result is automatically classified:
 
-| Badge          | Meaning                                             |
-|----------------|-----------------------------------------------------|
-| Movie          | Film release (detected from quality tags or category) |
-| S01E05         | Single TV episode                                   |
-| S01E01-E03     | Multiple episodes bundled together                  |
-| S02            | Full single season                                  |
-| Complete       | Multiple seasons or full series run                 |
-| Anime Ep       | Single anime episode (group-tagged release)         |
-| Batch          | Multi-episode anime pack                            |
-| ?              | Could not be determined                             |
+| Badge        | Meaning                                           |
+|--------------|---------------------------------------------------|
+| Movie        | Film (detected from quality tags or category)     |
+| S01E05       | Single TV episode                                 |
+| S01E01-E03   | Multiple episodes bundled in one torrent          |
+| S02          | Full single season                                |
+| Complete     | Multiple seasons or complete series run           |
+| Anime Ep     | Single anime episode (group-tagged release)       |
+| Batch        | Multi-episode anime pack e.g. [01-26]             |
+| ?            | Could not be determined                           |
 
 Hover any badge to see the full detail (e.g. "Season 2, Episode 7").
 
-After searching, a **Type** filter row appears — click any type to show only those results.
+---
+
+## Filters
+
+After searching, two filter rows appear above the results:
+
+**Type filter** — shows only content matching the selected type (Movie, Episode, Season Pack, etc.). Only types that appear in the current results are shown. Displays the count for each.
+
+**Quality filter** — shows only results matching the selected quality. Detected from the torrent title:
+
+| Filter  | Matches                              |
+|---------|--------------------------------------|
+| 4K      | 2160p, 4K UHD, UHD                   |
+| 1080p   | 1080p, 1080i                         |
+| 720p    | 720p, 720i                           |
+| 480p    | 480p, 480i                           |
+| BluRay  | BluRay, BDRip, BD Remux, REMUX       |
+| WEB     | WEB-DL, WEBRip, AMZN, NF, HULU      |
+| HDTV    | HDTV                                 |
+| CAM     | CAMRip, HDCAM, TS, TeleSync, DVDSCR  |
+
+Both filters can be active at the same time — e.g. you can show only 1080p Season Packs. Click a filter again or click "All" to clear it.
 
 ---
 
-## TMDB popovers (optional)
+## Metadata popovers (optional)
 
-Clicking the `i` button next to any result title shows a popover with the poster, rating, vote count, and synopsis pulled from a movie/TV metadata service. This requires a free API key.
+Click the `i` button next to any result title to see a popover with the poster image, rating, vote count, and synopsis from a movie/TV metadata service. Requires a free API key.
 
-To enable it, sign up at the metadata provider's site, generate an API key, and add it to your run command or `docker-compose.yml`:
+To enable, add your key to `docker-compose.yml`:
 
 ```yaml
 - TMDB_API_KEY=your_key_here
 ```
 
-If no key is configured, clicking the `i` button will show instructions for how to set one up.
+If no key is set, clicking `i` will show instructions explaining how to get one.
 
 ---
 
 ## Bitmagnet (optional but recommended)
 
-Bitmagnet is a self-hosted DHT crawler that builds its own torrent index over time. Once it has crawled for a day or two it becomes the most reliable source in TorrentDeck because it requires no external network requests and returns enriched metadata.
+Bitmagnet is a self-hosted DHT crawler that builds its own torrent index over time. Once it has crawled for a day or two it becomes the most reliable source in TorrentDeck — it requires no external network requests and returns enriched metadata.
 
 ### Installing Bitmagnet on Unraid
-
-Create a folder and compose file for it separately from TorrentDeck:
 
 ```bash
 mkdir -p /mnt/user/appdata/bitmagnet
@@ -244,28 +308,26 @@ services:
       interval: 10s
 ```
 
-Start it:
-
 ```bash
 docker-compose up -d
 ```
 
-Access its own web UI at `http://YOUR-UNRAID-IP:3333`. It starts crawling immediately — give it a day to build up a useful index. TorrentDeck will connect to it automatically once it's running.
+Access its web UI at `http://YOUR-UNRAID-IP:3333`. TorrentDeck connects to it automatically once it's running.
 
-> **Note:** Bitmagnet's index starts empty. Results will be sparse at first and improve over time as the DHT crawler discovers more content.
+> **Note:** The index starts empty and fills up over time as the DHT crawler discovers content.
 
 ---
 
 ## Prowlarr (optional)
 
-If you already run Prowlarr, TorrentDeck can search through all of its configured indexers in one go. Find your API key in Prowlarr under **Settings → General**, then add it to your environment:
+If you already run Prowlarr, TorrentDeck can search through all of its configured indexers in one go. Add your credentials to `docker-compose.yml`:
 
 ```yaml
 - PROWLARR_HOST=http://localhost:9696
 - PROWLARR_KEY=your_prowlarr_api_key
 ```
 
-The Prowlarr source pill will appear in the filter bar once the host and key are set.
+Your API key is in Prowlarr under **Settings → General**. The Prowlarr source pill appears in the filter bar automatically once both values are set.
 
 ---
 
@@ -284,29 +346,30 @@ docker run -d \
   -e QB_HOST=http://localhost:8080 \
   -e QB_USER=admin \
   -e QB_PASS=yourpassword \
+  -e QB_DOWNLOAD_PATHS=Movies:/downloads/Movies,Shows:/downloads/Shows,Downloads:/downloads \
   -e BITMAGNET_HOST=http://localhost:3333 \
   -e PORT=3000 \
   torrentdeck
 ```
 
-If you only changed `public/index.html` (frontend-only update), you can skip the rebuild and hot-swap just that file:
+**Frontend-only update** (changed `index.html` only — no server changes):
 
 ```bash
 docker cp public/index.html torrentdeck:/app/public/index.html
 ```
 
-Then hard-refresh your browser with `Ctrl+Shift+R`.
+Then hard-refresh with `Ctrl+Shift+R`.
 
 ---
 
 ## Checking logs
 
 ```bash
-docker logs torrentdeck
-docker logs torrentdeck -f   # follow live
+docker logs torrentdeck          # last output
+docker logs torrentdeck -f       # follow live
 ```
 
-On startup the logs confirm whether qBittorrent connected successfully, whether Bitmagnet is reachable, and which sources are available. Every search logs the result count per source so you can see immediately which ones are working.
+On startup the logs confirm the qBittorrent connection status, Bitmagnet availability, and which sources are reachable. Every search logs the result count per source so you can immediately see what's working.
 
 ---
 
@@ -314,20 +377,30 @@ On startup the logs confirm whether qBittorrent connected successfully, whether 
 
 **qBittorrent shows as offline**
 - Check that `QB_PASS` matches your actual qBittorrent password
-- Verify the port — the default is `8080` but yours may differ
-- If qBittorrent is set to allow connections from specific IPs only, add the Docker host IP to its whitelist under **Settings → Web UI → IP Filtering**
+- Verify the port — check the Web UI port mapping in the Unraid Docker tab
+- If qBittorrent restricts access by IP, add the Docker host IP to its whitelist under **Settings → Web UI → IP Filtering**
 
 **A source shows as failed**
-- That source is temporarily unreachable — the other sources still work
-- Check `docker logs torrentdeck` for the specific error message
-- Sources that use direct APIs tend to be more stable than those that rely on HTML scraping
+- That source is temporarily unreachable — the other sources continue to work
+- Sources using direct APIs are more stable than those relying on HTML scraping
+- Run `docker logs torrentdeck` to see the specific error
 
-**A source returns magnets but no seeds or size info**
-- Rebuild from the latest files — this was a parsing bug in earlier versions that has since been fixed
+**Torrents are downloading to the wrong folder**
+- Make sure you're using the **container path** in `QB_DOWNLOAD_PATHS`, not the Unraid host path
+- Example: if `/downloads` maps to `/mnt/user/Share/Jellyfin/`, use `/downloads/Movies` not `/mnt/user/Share/Jellyfin/Movies`
+- Check qBittorrent's path mapping under **Settings → Downloads** in its web UI
+
+**Metadata popovers not working**
+- Confirm `TMDB_API_KEY` is set correctly in your environment
+- Click the `i` button — if the key isn't configured it will show setup instructions
+
+**Quality filter not showing**
+- The quality filter row only appears when results contain recognisable quality tags (1080p, BluRay, etc.) in the torrent titles
+- Results from sources that don't include quality info in the title will not be filterable by quality
 
 **Container can't reach qBittorrent or Bitmagnet**
-- TorrentDeck uses `--network host` by default, meaning `localhost` inside the container refers to the Unraid host
-- If you switched to bridge networking, change `QB_HOST` to `http://host.docker.internal:8080` and add `--add-host=host.docker.internal:host-gateway` to your `docker run` command
+- TorrentDeck uses `--network host` by default, so `localhost` inside the container refers to the Unraid host
+- If you switched to bridge networking, change `QB_HOST` to `http://host.docker.internal:8080` and add `--add-host=host.docker.internal:host-gateway` to your run command
 
 ---
 
@@ -336,11 +409,11 @@ On startup the logs confirm whether qBittorrent connected successfully, whether 
 ```
 torrentdeck/
 ├── Dockerfile            # Node 20 Alpine image
-├── docker-compose.yml    # Environment variables and networking config
+├── docker-compose.yml    # All environment variables and networking config
 ├── package.json          # Dependencies
-├── server.js             # Express server — all source integrations, qBT proxy, API routes
+├── server.js             # Express server — sources, qBT proxy, TMDB proxy, API routes
 └── public/
-    └── index.html        # Single-page frontend — all UI, no build step needed
+    └── index.html        # Single-page frontend — all UI, themes, filters, and state
 ```
 
 No database, no build pipeline, no external state. Everything runs from a single Node process serving static HTML.

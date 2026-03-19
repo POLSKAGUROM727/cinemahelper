@@ -73,6 +73,27 @@
       --text: #edddef; --text2: #a07aaa; --text3: #644d70;
       --cyan: #e879f9; --green: #c084fc;
     }
+    /* 7. Arctic (bright light, clean whites and blues) */
+    [data-theme="arctic"] {
+      --bg:     #f0f4f8; --bg2: #ffffff; --bg3: #e8eef4; --bg4: #d8e4ee;
+      --border: #c0cdd8; --bord2: #a0b4c4;
+      --text: #1a2635; --text2: #3a5068; --text3: #7a95aa;
+      --cyan: #0284c7; --green: #16a34a;
+    }
+    /* 8. Latte (warm off-white, coffee tones) */
+    [data-theme="latte"] {
+      --bg:     #f5f0e8; --bg2: #fdf8f0; --bg3: #ede5d8; --bg4: #e0d4c0;
+      --border: #ccc0a8; --bord2: #b8a888;
+      --text: #2c1f0e; --text2: #6b4e2a; --text3: #9e7c50;
+      --cyan: #b45309; --green: #15803d;
+    }
+    /* 9. Neon (dark bg, vivid electric accents — high visibility) */
+    [data-theme="neon"] {
+      --bg:     #080810; --bg2: #0e0e1c; --bg3: #141428; --bg4: #1c1c38;
+      --border: #2a2a50; --bord2: #3a3a70;
+      --text: #f0f0ff; --text2: #b0b0e0; --text3: #7070aa;
+      --cyan: #00ffff; --green: #39ff14;
+    }
 
     /* ── THEME PICKER ── */
     .theme-btn {
@@ -194,6 +215,7 @@
     .pill.tf-anime_ep.on  { background: rgba(249,115,22,.12);  border-color: var(--orange); color: var(--orange); }
     .pill.tf-anime_pack.on{ background: rgba(234,179,8,.12);   border-color: var(--yellow); color: var(--yellow); }
     .pill.tf-unknown.on   { background: rgba(100,116,139,.1);  border-color: var(--text3);  color: var(--text3); }
+    .pill.qf.on           { background: rgba(251,191,36,.12);  border-color: var(--yellow); color: var(--yellow); }
     .pill .err-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--red); flex-shrink: 0; }
     .filter-div { width: 1px; height: 16px; background: var(--border); margin: 0 1px; flex-shrink: 0; }
     .err-msg { font-size: 11px; color: var(--red); }
@@ -573,7 +595,7 @@ function saveSources(srcs) {
 
 // ─── State ────────────────────────────────────────────────────────────────────
 const S = {
-  query:'', sources: loadSources(), typeFilter: null,
+  query:'', sources: loadSources(), typeFilter: null, qualityFilter: null,
   results:[], errors:{}, searching:false,
   addingId:null, fetchingId:null, addedIds: new Set(),
   sortCol:'seeders', sortDir:'desc',
@@ -604,6 +626,25 @@ const TYPES = [
   { key:'anime_pack', label:'Anime Batch'    },
   { key:'unknown',    label:'Unknown'        },
 ];
+
+// Quality tags matched against torrent titles (order matters — most specific first)
+const QUALITIES = [
+  { key:'2160p', label:'4K',    regex:/\b(2160p|4K UHD|UHD|4K)\b/i },
+  { key:'1080p', label:'1080p', regex:/\b1080[pi]\b/i },
+  { key:'720p',  label:'720p',  regex:/\b720[pi]\b/i  },
+  { key:'480p',  label:'480p',  regex:/\b480[pi]\b/i  },
+  { key:'bluray',label:'BluRay',regex:/\b(BluRay|BDRip|BD Remux|REMUX)\b/i },
+  { key:'web',   label:'WEB',   regex:/\b(WEB-DL|WEBRip|WEBDL|AMZN|NF|HULU)\b/i },
+  { key:'hdtv',  label:'HDTV',  regex:/\bHDTV\b/i },
+  { key:'cam',   label:'CAM',   regex:/\b(CAMRip|HDCAM|TS|TeleSync|DVDSCR)\b/i },
+];
+
+function detectQuality(title) {
+  for (const q of QUALITIES) {
+    if (q.regex.test(title)) return q.key;
+  }
+  return null;
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function fmtSpeed(n) {
@@ -798,6 +839,7 @@ function updateFilters() {
   if (!el) return;
   const errCount = Object.keys(S.errors).length;
   const counts   = typeCounts();
+  const qcounts  = qualityCounts();
   const hasResults = S.results.length > 0;
 
   el.innerHTML = `
@@ -819,17 +861,33 @@ function updateFilters() {
         <button class="pill tf-${t.key} ${S.typeFilter===t.key?'on':''}" data-type="${t.key}">
           ${t.label} <span style="opacity:.5;font-size:10px">${counts[t.key]}</span>
         </button>`).join('')}
+    </div>
+    ${Object.keys(qcounts).length > 0 ? `
+    <div class="filter-row">
+      <span class="filter-label">Quality</span>
+      <button class="pill ${!S.qualityFilter?'on':''}" data-qual="">
+        All
+      </button>
+      ${QUALITIES.filter(q=>qcounts[q.key]>0).map(q=>`
+        <button class="pill qf ${S.qualityFilter===q.key?'on':''}" data-qual="${q.key}">
+          ${q.label} <span style="opacity:.5;font-size:10px">${qcounts[q.key]}</span>
+        </button>`).join('')}
     </div>` : ''}
+    ` : ''}
   `;
 
   el.querySelectorAll('[data-src]').forEach(b => b.addEventListener('click', () => {
     const id = b.dataset.src;
     S.sources = S.sources.includes(id) ? S.sources.filter(x=>x!==id) : [...S.sources, id];
-    saveSources(S.sources);   // ← persist to localStorage
+    saveSources(S.sources);
     updateFilters();
   }));
   el.querySelectorAll('[data-type]').forEach(b => b.addEventListener('click', () => {
     S.typeFilter = b.dataset.type || null;
+    updateFilters(); updateResultsPanel();
+  }));
+  el.querySelectorAll('[data-qual]').forEach(b => b.addEventListener('click', () => {
+    S.qualityFilter = b.dataset.qual || null;
     updateFilters(); updateResultsPanel();
   }));
 }
@@ -840,9 +898,19 @@ function typeCounts() {
   return c;
 }
 
+function qualityCounts() {
+  const c = {};
+  for (const r of S.results) {
+    const q = detectQuality(r.title);
+    if (q) c[q] = (c[q]||0) + 1;
+  }
+  return c;
+}
+
 function filteredResults() {
   let rows = S.results;
-  if (S.typeFilter) rows = rows.filter(r => r.media?.type === S.typeFilter);
+  if (S.typeFilter)    rows = rows.filter(r => r.media?.type === S.typeFilter);
+  if (S.qualityFilter) rows = rows.filter(r => detectQuality(r.title) === S.qualityFilter);
   const col=S.sortCol, dir=S.sortDir==='asc'?1:-1;
   return [...rows].sort((a,b)=>{
     let av=a[col]??0, bv=b[col]??0;
@@ -862,10 +930,12 @@ function updateResultsPanel() {
   head.innerHTML = `Results ${total?`<span class="count">${shown}${shown<total?` / ${total}`:''}</span>`:''}${S.searching?'<span class="spinner" style="margin-left:auto"></span>':''}`;
 
   if (rows.length===0 && !S.searching) {
-    const msg = S.typeFilter && total > 0
-      ? `No "${TYPES.find(t=>t.key===S.typeFilter)?.label}" results. Clear the type filter.`
-      : `Search across ${S.sources.length} source${S.sources.length!==1?'s':''}.`;
-    body.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><h3>${total?'No matches':'No results yet'}</h3><p>${msg}</p></div>`;
+    const activeFilter = S.qualityFilter
+      ? `No ${QUALITIES.find(q=>q.key===S.qualityFilter)?.label||S.qualityFilter} results. Clear the quality filter.`
+      : S.typeFilter && total > 0
+        ? `No "${TYPES.find(t=>t.key===S.typeFilter)?.label}" results. Clear the type filter.`
+        : `Search across ${S.sources.length} source${S.sources.length!==1?'s':''}.`;
+    body.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><h3>${total?'No matches':'No results yet'}</h3><p>${activeFilter}</p></div>`;
     return;
   }
   if (rows.length===0 && S.searching) {
@@ -996,7 +1066,7 @@ function updateSearchBtn() {
 
 async function search() {
   if (!S.query.trim() || S.searching) return;
-  S.searching = true; S.results = []; S.errors = {}; S.typeFilter = null;
+  S.searching = true; S.results = []; S.errors = {}; S.typeFilter = null; S.qualityFilter = null;
   updateSearchBtn(); updateResultsPanel(); updateFilters();
   // On mobile, switch to results tab automatically
   if (window.innerWidth <= 700) switchTab('results');
@@ -1168,6 +1238,18 @@ const THEMES = [
   {
     id: 'rose', label: 'Rose', icon: '🌸',
     swatchBg: '#110d12', swatchBg2: '#22182c', swatchAcc: '#e879f9', swatchAcc2: '#c084fc',
+  },
+  {
+    id: 'arctic', label: 'Arctic', icon: '🧊',
+    swatchBg: '#f0f4f8', swatchBg2: '#e8eef4', swatchAcc: '#0284c7', swatchAcc2: '#16a34a',
+  },
+  {
+    id: 'latte', label: 'Latte', icon: '☕',
+    swatchBg: '#f5f0e8', swatchBg2: '#ede5d8', swatchAcc: '#b45309', swatchAcc2: '#15803d',
+  },
+  {
+    id: 'neon', label: 'Neon', icon: '⚡',
+    swatchBg: '#080810', swatchBg2: '#141428', swatchAcc: '#00ffff', swatchAcc2: '#39ff14',
   },
 ];
 
