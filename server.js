@@ -574,21 +574,56 @@ async function searchProwlarr(q) {
 
 const scrapers = { tpb: searchTPB, yts: searchYTS, eztv: searchEZTV, '1337x': search1337x, rarbg: searchRarbg, nyaa: searchNyaa, custom: searchCustom, bitmagnet: searchBitmagnet, prowlarr: searchProwlarr };
 
+// ─── NSFW keyword list for server-side pre-filter ────────────────────────────
+const NSFW_KEYWORDS = [
+  'xxx','porn','pornhub','xvideos','xhamster','brazzers','bangbros','blacked',
+  'nubiles','realitykings','mofos','wicked','penthouse','playboy','hustler',
+  'onlyfans','fansly','camgirl','camshow','nude','naked','nsfw','hentai',
+  'hentai-','erotic','erotica','anal','milf','creampie','cumshot','gangbang',
+  'threesome','blowjob','handjob','lesbian sex','gay sex','tranny','shemale',
+  'transsex','incest','taboo sex','rape','bdsm','bondage','fetish','squirt',
+  'orgasm','pussy','vagina','penis','cock','dick','boobs','tits','ass fuck',
+  'sex tape','sextape','sex video','teen sex','teen nude','underage',
+].map(w => w.toLowerCase());
+
+function isNsfw(title) {
+  const t = title.toLowerCase();
+  return NSFW_KEYWORDS.some(kw => {
+    // Whole-word or boundary match to avoid false positives (e.g. "class" ≠ "ass")
+    const re = new RegExp(`(^|[\\s.\\-_(\\[,])${kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}([\\s.\\-_)\\],]|$)`, 'i');
+    return re.test(t);
+  });
+}
+
+// TPB adult categories: 500-series (XXX)
+const TPB_ADULT_CATS = ['500','501','502','503','504','505','506','507','508','509','510'];
+function tpbIsAdult(result) {
+  return result._tpbCat && TPB_ADULT_CATS.includes(String(result._tpbCat));
+}
+
 app.get('/api/search', async (req, res) => {
-  const q = (req.query.q || '').trim();
+  const q       = (req.query.q || '').trim();
+  const filterNsfw = req.query.filterNsfw !== 'false'; // default ON
   if (!q) return res.json({ results: [], errors: {} });
   const sources = (req.query.sources || 'tpb,nyaa,rarbg').split(',').filter(Boolean);
-  console.log(`\n[SEARCH] "${q}"  sources: ${sources.join(', ')}`);
+  console.log(`\n[SEARCH] "${q}"  sources: ${sources.join(', ')}  filterNsfw: ${filterNsfw}`);
   const results = [], errors = {};
   await Promise.all(sources.map(async s => {
     if (!scrapers[s]) return;
     try {
       const r = await scrapers[s](q);
-      r.forEach(x => results.push({ ...x, id: Math.random().toString(36).slice(2, 9) }));
+      r.forEach(x => {
+        const entry = { ...x, id: Math.random().toString(36).slice(2, 9) };
+        entry.nsfw = isNsfw(x.title) || tpbIsAdult(x);
+        results.push(entry);
+      });
     } catch (e) { console.error(`[SEARCH][${s}] FAILED:`, e.message); errors[s] = e.message; }
   }));
-  console.log(`[SEARCH] total: ${results.length}, errors: ${JSON.stringify(errors)}`);
-  res.json({ results, errors });
+  // Tag counts before filtering so the client knows how many were hidden
+  const nsfwCount = results.filter(r => r.nsfw).length;
+  const filtered  = filterNsfw ? results.filter(r => !r.nsfw) : results;
+  console.log(`[SEARCH] total: ${results.length}  nsfw: ${nsfwCount}  returned: ${filtered.length}`);
+  res.json({ results: filtered, errors, nsfwCount, filterNsfw });
 });
 
 app.get('/api/magnet', async (req, res) => {

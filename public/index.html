@@ -220,6 +220,24 @@
     .filter-div { width: 1px; height: 16px; background: var(--border); margin: 0 1px; flex-shrink: 0; }
     .err-msg { font-size: 11px; color: var(--red); }
 
+    /* ─── PAGINATION ─────────────────────────────────────────── */
+    .pager { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 12px 8px 6px; flex-wrap: wrap; }
+    .pager-btn { background: var(--bg2); border: 1px solid var(--border); color: var(--text2); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; transition: background .15s, border-color .15s; min-width: 32px; }
+    .pager-btn:hover:not(:disabled) { background: var(--bg3); border-color: var(--cyan); color: var(--cyan); }
+    .pager-btn.active { background: rgba(125,211,252,.15); border-color: var(--cyan); color: var(--cyan); font-weight: 700; }
+    .pager-btn:disabled { opacity: .35; cursor: default; }
+    .pager-ellipsis { color: var(--text3); font-size: 12px; padding: 0 2px; }
+
+    /* ─── RELEVANCE BAR ──────────────────────────────────────────── */
+    .col-rel { width: 56px; }
+    .rel-bar { display: flex; align-items: center; gap: 4px; width: 100%; }
+    .rel-fill { height: 4px; border-radius: 2px; flex-shrink: 0; transition: width .2s; min-width: 2px; }
+    .rel-num { font-size: 10px; font-weight: 600; opacity: .85; white-space: nowrap; }
+
+    /* ─── NSFW TOGGLE ─────────────────────────────────────────── */
+    .pill#nsfw-toggle { background: rgba(52,211,153,.08); border-color: rgba(52,211,153,.3); color: #34d399; }
+    .pill#nsfw-toggle.on { background: rgba(248,113,113,.08); border-color: rgba(248,113,113,.35); color: #f87171; }
+
     /* ─── MAIN LAYOUT ────────────────────────────────────────── */
     .main { display: grid; grid-template-columns: 1fr 380px; flex: 1; overflow: hidden; min-height: 0; }
 
@@ -596,12 +614,15 @@ function saveSources(srcs) {
 // ─── State ────────────────────────────────────────────────────────────────────
 const S = {
   query:'', sources: loadSources(), typeFilter: null, qualityFilter: null,
-  results:[], errors:{}, searching:false,
+  results:[], errors:{}, searching:false, nsfwCount:0,
   addingId:null, fetchingId:null, addedIds: new Set(),
-  sortCol:'seeders', sortDir:'desc',
+  sortCol:'relevance', sortDir:'desc',
   queue:[], qbOk:false, dlSpeed:0, ulSpeed:0, lastRefresh:null,
   tmdbAvailable: null,  // null=unknown, true=key set, false=no key
   activeTab: 'results', // mobile tab
+  filterNsfw: localStorage.getItem('filterNsfw') !== 'false', // NSFW filter, default ON
+  page: 1,
+  pageSize: parseInt(localStorage.getItem('pageSize')||'50',10),
 };
 
 const SOURCES = [
@@ -851,6 +872,13 @@ function updateFilters() {
         </button>`).join('')}
       ${errCount?`<span class="err-msg">${errCount} failed</span>`:''}
     </div>
+    <div class="filter-row" style="margin-top:2px">
+      <span class="filter-label">Safe Search</span>
+      <button class="pill ${S.filterNsfw?'on':''}" id="nsfw-toggle" title="${S.filterNsfw?'NSFW results hidden — click to show all':'Click to hide NSFW results'}">
+        ${S.filterNsfw?'🔒 NSFW Off':'🔓 NSFW On'}
+      </button>
+      ${S.nsfwCount>0&&S.filterNsfw?`<span style="font-size:10px;color:var(--text3);margin-left:2px">(${S.nsfwCount} hidden)</span>`:''}
+    </div>
     ${hasResults ? `
     <div class="filter-row">
       <span class="filter-label">Type</span>
@@ -873,6 +901,11 @@ function updateFilters() {
           ${q.label} <span style="opacity:.5;font-size:10px">${qcounts[q.key]}</span>
         </button>`).join('')}
     </div>` : ''}
+    <div class="filter-row">
+      <span class="filter-label">Per page</span>
+      ${[25,50,100,200].map(n=>`
+        <button class="pill ${S.pageSize===n?'on':''}" data-pagesize="${n}">${n}</button>`).join('')}
+    </div>
     ` : ''}
   `;
 
@@ -884,10 +917,28 @@ function updateFilters() {
   }));
   el.querySelectorAll('[data-type]').forEach(b => b.addEventListener('click', () => {
     S.typeFilter = b.dataset.type || null;
+    S.page = 1;
     updateFilters(); updateResultsPanel();
   }));
   el.querySelectorAll('[data-qual]').forEach(b => b.addEventListener('click', () => {
     S.qualityFilter = b.dataset.qual || null;
+    S.page = 1;
+    updateFilters(); updateResultsPanel();
+  }));
+  const nsfwBtn = document.getElementById('nsfw-toggle');
+  if (nsfwBtn) {
+    nsfwBtn.addEventListener('click', () => {
+      S.filterNsfw = !S.filterNsfw;
+      localStorage.setItem('filterNsfw', S.filterNsfw);
+      S.page = 1;
+      if (S.query.trim()) search();
+      else { updateFilters(); updateResultsPanel(); }
+    });
+  }
+  el.querySelectorAll('[data-pagesize]').forEach(b => b.addEventListener('click', () => {
+    S.pageSize = parseInt(b.dataset.pagesize, 10);
+    localStorage.setItem('pageSize', S.pageSize);
+    S.page = 1;
     updateFilters(); updateResultsPanel();
   }));
 }
@@ -907,10 +958,60 @@ function qualityCounts() {
   return c;
 }
 
-function filteredResults() {
+// ─── Relevance scoring ────────────────────────────────────────────────────────
+function scoreRelevance(title, query) {
+  if (!query) return 0;
+  const t = title.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const q = query.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+  const tWords = t.split(/\s+/).filter(Boolean);
+  const qWords = q.split(/\s+/).filter(Boolean);
+  if (!qWords.length) return 0;
+
+  let score = 0;
+
+  // Exact full-query match anywhere in title (highest weight)
+  if (t.includes(q)) score += 100;
+
+  // All query words present
+  const allPresent = qWords.every(w => tWords.includes(w));
+  if (allPresent) score += 60;
+
+  // Each matching word
+  const matchCount = qWords.filter(w => tWords.includes(w)).length;
+  score += (matchCount / qWords.length) * 40;
+
+  // Partial word matches (prefix)
+  qWords.forEach(qw => {
+    if (tWords.some(tw => tw.startsWith(qw) && tw !== qw)) score += 5;
+  });
+
+  // Title starts with query words (strong signal)
+  if (tWords.slice(0, qWords.length).join(' ') === qWords.join(' ')) score += 30;
+
+  // Penalise very long titles (likely release-group noise)
+  if (tWords.length > 12) score -= (tWords.length - 12) * 1.5;
+
+  return score;
+}
+
+function allFilteredResults() {
   let rows = S.results;
   if (S.typeFilter)    rows = rows.filter(r => r.media?.type === S.typeFilter);
   if (S.qualityFilter) rows = rows.filter(r => detectQuality(r.title) === S.qualityFilter);
+
+  if (S.sortCol === 'relevance') {
+    const q = S.query.trim();
+    // Compute and cache relevance score on each row
+    rows = rows.map(r => ({ ...r, _rel: scoreRelevance(r.title, q) }));
+    const dir = S.sortDir === 'asc' ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const rd = (b._rel - a._rel) * dir;
+      if (rd !== 0) return rd;
+      // Tiebreak: seeders descending
+      return (b.seeders || 0) - (a.seeders || 0);
+    });
+  }
+
   const col=S.sortCol, dir=S.sortDir==='asc'?1:-1;
   return [...rows].sort((a,b)=>{
     let av=a[col]??0, bv=b[col]??0;
@@ -919,22 +1020,34 @@ function filteredResults() {
   });
 }
 
+function filteredResults() {
+  const all = allFilteredResults();
+  const start = (S.page - 1) * S.pageSize;
+  return all.slice(start, start + S.pageSize);
+}
+
 function updateResultsPanel() {
   const head = document.getElementById('results-head');
   const body = document.getElementById('results-body');
   if (!head||!body) return;
+  const allRows = allFilteredResults();
+  const totalFiltered = allRows.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / S.pageSize));
+  if (S.page > totalPages) S.page = totalPages;
   const rows  = filteredResults();
   const total = S.results.length;
-  const shown = rows.length;
 
-  head.innerHTML = `Results ${total?`<span class="count">${shown}${shown<total?` / ${total}`:''}</span>`:''}${S.searching?'<span class="spinner" style="margin-left:auto"></span>':''}`;
-
+  const pageLabel = totalPages > 1 ? ` · Page ${S.page}/${totalPages}` : '';
+  head.innerHTML = `Results ${total?`<span class="count">${totalFiltered}${totalFiltered<total?` / ${total}`:''}</span>`:''}<span style="font-size:10px;opacity:.5;margin-left:4px">${pageLabel}</span>${S.searching?'<span class="spinner" style="margin-left:auto"></span>':''}`;
   if (rows.length===0 && !S.searching) {
+    const nsfwNote = S.filterNsfw && S.nsfwCount > 0
+      ? ` ${S.nsfwCount} NSFW result${S.nsfwCount!==1?'s were':' was'} hidden — toggle Safe Search off to see them.`
+      : '';
     const activeFilter = S.qualityFilter
       ? `No ${QUALITIES.find(q=>q.key===S.qualityFilter)?.label||S.qualityFilter} results. Clear the quality filter.`
       : S.typeFilter && total > 0
         ? `No "${TYPES.find(t=>t.key===S.typeFilter)?.label}" results. Clear the type filter.`
-        : `Search across ${S.sources.length} source${S.sources.length!==1?'s':''}.`;
+        : `Search across ${S.sources.length} source${S.sources.length!==1?'s':''}.${nsfwNote}`;
     body.innerHTML = `<div class="empty"><div class="empty-icon">🔍</div><h3>${total?'No matches':'No results yet'}</h3><p>${activeFilter}</p></div>`;
     return;
   }
@@ -946,15 +1059,16 @@ function updateResultsPanel() {
   body.innerHTML = `<table>
     <colgroup>
       <col class="col-name"><col class="col-type"><col class="col-size">
-      <col class="col-seeds"><col class="col-leech"><col class="col-src"><col class="col-act">
+      <col class="col-seeds"><col class="col-leech"><col class="col-src"><col class="col-rel"><col class="col-act">
     </colgroup>
     <thead><tr>
-      <th data-col="title"    class="${S.sortCol==='title'   ?S.sortDir:''}">Name</th>
+      <th data-col="title"     class="${S.sortCol==='title'    ?S.sortDir:''}">Name</th>
       <th data-col="media">Type</th>
-      <th data-col="size"     class="${S.sortCol==='size'    ?S.sortDir:''} hide-mobile">Size</th>
-      <th data-col="seeders"  class="${S.sortCol==='seeders' ?S.sortDir:''}">Seeds</th>
-      <th data-col="leechers" class="${S.sortCol==='leechers'?S.sortDir:''} hide-mobile">Leech</th>
-      <th data-col="source"   class="${S.sortCol==='source'  ?S.sortDir:''} hide-mobile">Source</th>
+      <th data-col="size"      class="${S.sortCol==='size'     ?S.sortDir:''} hide-mobile">Size</th>
+      <th data-col="seeders"   class="${S.sortCol==='seeders'  ?S.sortDir:''}">Seeds</th>
+      <th data-col="leechers"  class="${S.sortCol==='leechers' ?S.sortDir:''} hide-mobile">Leech</th>
+      <th data-col="source"    class="${S.sortCol==='source'   ?S.sortDir:''} hide-mobile">Source</th>
+      <th data-col="relevance" class="${S.sortCol==='relevance'?S.sortDir:''} hide-mobile" title="Sort by how closely the title matches your search">Match</th>
       <th></th>
     </tr></thead>
     <tbody>${rows.map(item=>{
@@ -963,6 +1077,9 @@ function updateResultsPanel() {
       const titleHtml = srcUrl
         ? `<a href="${esc(srcUrl)}" target="_blank" rel="noopener noreferrer">${esc(item.title)}</a>`
         : esc(item.title);
+      const relScore = item._rel != null ? Math.round(item._rel) : scoreRelevance(item.title, S.query.trim());
+      const relPct   = Math.min(100, Math.max(0, relScore));
+      const relColor = relPct >= 70 ? 'var(--cyan)' : relPct >= 35 ? 'var(--yellow)' : 'var(--text3)';
       return `<tr>
         <td>
           <div class="t-name">${titleHtml}<button class="t-info-btn" data-tmdb-title="${esc(item.title)}" data-tmdb-skey="${esc(item.skey)}" title="Look up on TMDB">i</button></div>
@@ -972,6 +1089,7 @@ function updateResultsPanel() {
         <td><span class="t-seeds">${item.seeders}</span></td>
         <td class="hide-mobile"><span class="t-leech">${item.leechers}</span></td>
         <td class="hide-mobile"><span class="src-badge src-${esc(item.skey)}">${esc(item.source)}</span></td>
+        <td class="hide-mobile"><span class="rel-bar" title="Relevance: ${relPct}"><span class="rel-fill" style="width:${relPct}%;background:${relColor}"></span><span class="rel-num" style="color:${relColor}">${relPct}</span></span></td>
         <td>${isAdded
           ?`<button class="add-btn added" disabled>✓ Added</button>`
           :`<button class="add-btn" data-add="${esc(JSON.stringify(item))}" ${S.addingId||!S.qbOk?'disabled':''} title="${!S.qbOk?'qBittorrent offline':'Add to qBittorrent'}">${isAdding?(isFetch?'<span class="spinner sm"></span>…':'<span class="spinner sm"></span>'):'+ Add'}</button>`}
@@ -985,6 +1103,7 @@ function updateResultsPanel() {
     th.addEventListener('click', () => {
       S.sortDir = S.sortCol===th.dataset.col ? (S.sortDir==='desc'?'asc':'desc') : 'desc';
       S.sortCol = th.dataset.col;
+      S.page = 1;
       updateResultsPanel();
     });
   });
@@ -995,6 +1114,35 @@ function updateResultsPanel() {
     e.preventDefault(); e.stopPropagation();
     showTMDB(btn.dataset.tmdbTitle, btn.dataset.tmdbSkey);
   }));
+
+  // ── Pagination controls ──────────────────────────────────────────────────────
+  const allRows2     = allFilteredResults();
+  const totalPages2  = Math.max(1, Math.ceil(allRows2.length / S.pageSize));
+  if (totalPages2 > 1) {
+    const pager = document.createElement('div');
+    pager.className = 'pager';
+    const mkBtn = (label, page, disabled, active) => {
+      const b = document.createElement('button');
+      b.className = 'pager-btn' + (active ? ' active' : '');
+      b.textContent = label;
+      b.disabled = disabled;
+      if (!disabled) b.addEventListener('click', () => {
+        S.page = page;
+        updateResultsPanel();
+        body.scrollTop = 0;
+      });
+      return b;
+    };
+    pager.appendChild(mkBtn('‹ Prev', S.page - 1, S.page <= 1, false));
+    // Page number buttons: show up to 7 around current page
+    const start = Math.max(1, S.page - 3);
+    const end   = Math.min(totalPages2, start + 6);
+    if (start > 1) { pager.appendChild(mkBtn('1', 1, false, false)); if (start > 2) { const d=document.createElement('span'); d.textContent='…'; d.className='pager-ellipsis'; pager.appendChild(d); } }
+    for (let p = start; p <= end; p++) pager.appendChild(mkBtn(String(p), p, false, p === S.page));
+    if (end < totalPages2) { if (end < totalPages2-1) { const d=document.createElement('span'); d.textContent='…'; d.className='pager-ellipsis'; pager.appendChild(d); } pager.appendChild(mkBtn(String(totalPages2), totalPages2, false, false)); }
+    pager.appendChild(mkBtn('Next ›', S.page + 1, S.page >= totalPages2, false));
+    body.appendChild(pager);
+  }
 }
 
 function updateQueuePanel() {
@@ -1067,14 +1215,16 @@ function updateSearchBtn() {
 async function search() {
   if (!S.query.trim() || S.searching) return;
   S.searching = true; S.results = []; S.errors = {}; S.typeFilter = null; S.qualityFilter = null;
+  S.page = 1; S.nsfwCount = 0; S.sortCol = 'relevance'; S.sortDir = 'desc';
   updateSearchBtn(); updateResultsPanel(); updateFilters();
   // On mobile, switch to results tab automatically
   if (window.innerWidth <= 700) switchTab('results');
   try {
-    const r = await fetch(`/api/search?q=${encodeURIComponent(S.query.trim())}&sources=${S.sources.join(',')}`);
+    const r = await fetch(`/api/search?q=${encodeURIComponent(S.query.trim())}&sources=${S.sources.join(',')}&filterNsfw=${S.filterNsfw}`);
     const d = await r.json();
-    S.results = d.results || [];
-    S.errors  = d.errors  || {};
+    S.results    = d.results    || [];
+    S.errors     = d.errors     || {};
+    S.nsfwCount  = d.nsfwCount  || 0;
   } catch(e) { S.errors = {_:e.message}; }
   S.searching = false;
   updateSearchBtn(); updateResultsPanel(); updateFilters();
