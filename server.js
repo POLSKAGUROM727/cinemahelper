@@ -521,10 +521,14 @@ async function qbLogin() {
     const r = await axios.post(`${QB_HOST}/api/v2/auth/login`,
       `username=${encodeURIComponent(QB_USER)}&password=${encodeURIComponent(QB_PASS)}`,
       { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, validateStatus: () => true });
-    const sid = [].concat(r.headers['set-cookie'] || []).find(c => c.startsWith('SID='));
-    if (sid) { qbSid = sid.split(';')[0]; return true; }
-    if (r.data === 'Ok.') return true;
-    console.error('[QB] login response:', r.data); return false;
+    // 5.2.0+ returns 204 with no body; older versions return 200 with "Ok."
+    const ok = r.status === 204 || r.data === 'Ok.';
+    if (!ok) { console.error('[QB] login rejected:', r.status, r.data); return false; }
+    // 5.2.0+ renamed cookie from SID= to QBT_SID_{port}=
+    const cookies = [].concat(r.headers['set-cookie'] || []);
+    const sid = cookies.find(c => c.startsWith('SID=') || c.match(/^QBT_SID_\d+=/)  );
+    if (sid) { qbSid = sid.split(';')[0]; }
+    return true;
   } catch (e) { console.error('[QB] login error:', e.message); return false; }
 }
 async function qbGet(p, retry = true) {
